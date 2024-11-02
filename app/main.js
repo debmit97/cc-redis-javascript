@@ -13,6 +13,13 @@ function handleEcho(echoArg) {
 function handleSet(setArgs) {
     const [key, value] = setArgs
     store.set(key, value)
+    if(setArgs.length > 2) {
+        if(setArgs[2].toUpperCase() === 'PX') {
+            setTimeout(() => {
+                store.delete(key)
+            }, parseInt(setArgs[3]))
+        }
+    }
     return '+OK\r\n'
 }
 
