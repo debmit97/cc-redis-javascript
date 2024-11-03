@@ -31,6 +31,18 @@ function handleGet(getArg) {
     return `$-1\r\n`
 }
 
+function handleConfig(configArgs) {
+    const [command, arg] = configArgs
+    if(command.toUpperCase() === 'GET') {
+        if(arg === 'dir') {
+            return `*2\r\n$3\r\ndir\r\n$${process.argv[3].length}\r\n${process.argv[3]}\r\n`
+        } else if (arg === 'dbfilename') {
+            return `*2\r\n$10\r\ndbfilename\r\n$${process.argv[5].length}\r\n${process.argv[5]}\r\n`
+        }
+    }
+    
+}
+
 function commandResponse(commandString) {
     const commandArray = commandString.split(' ')
     switch (commandArray[0].toUpperCase()) {
@@ -42,6 +54,8 @@ function commandResponse(commandString) {
             return handleSet(commandArray.slice(1))
         case 'GET':
             return handleGet(commandArray.slice(1))
+        case 'CONFIG':
+            return handleConfig(commandArray.slice(1))
     }
 }
 
