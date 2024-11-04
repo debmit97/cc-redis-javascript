@@ -1,7 +1,8 @@
 const net = require("net");
-const { readRdbFile } = require("./parseRDB.js");
+const fs = require("fs")
+const { RDBParser } = require("./parseRDB.js");
 
-const store = new Map();
+let store = new Map();
 
 function handlePing() {
   return "+PONG\r\n";
@@ -13,21 +14,19 @@ function handleEcho(echoArg) {
 
 function handleSet(setArgs) {
   const [key, value] = setArgs;
-  store.set(key, value);
+  store.set(key, {value});
   if (setArgs.length > 2) {
     if (setArgs[2].toUpperCase() === "PX") {
-      setTimeout(() => {
-        store.delete(key);
-      }, parseInt(setArgs[3]));
-    }
+      store.set(key, {value, expiration: Date.now()+parseInt(setArgs[3])});
+    } 
   }
   return "+OK\r\n";
 }
 
 function handleGet(getArg) {
   const [key] = getArg;
-  if (store.has(key)) {
-    return `$${store.get(key).length}\r\n${store.get(key)}\r\n`;
+  if (store.has(key) && (!store.get(key).expiration || (store.get(key).expiration && store.get(key).expiration > BigInt(Date.now())))) {
+    return `$${store.get(key).value.length}\r\n${store.get(key).value}\r\n`;
   }
   return `$-1\r\n`;
 }
@@ -89,6 +88,16 @@ const server = net.createServer((connection) => {
     connection.write(commandResponse(command));
   });
 });
-readRdbFile(store)
-console.log(store)
+
+function loadRDBFile () {
+  let filePath = `${process.argv[3]}/${process.argv[5]}`;
+  if (!fs.existsSync(filePath)) return;
+  const fileBuffer = fs.readFileSync(filePath);
+  let rdbParser = new RDBParser(fileBuffer);
+  rdbParser.parse();
+  store = rdbParser.dataStore;
+  console.log(store)
+}
+
+loadRDBFile()
 server.listen(6379, "127.0.0.1");
