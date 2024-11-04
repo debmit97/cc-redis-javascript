@@ -3,6 +3,7 @@ const fs = require("fs")
 const { RDBParser } = require("./parseRDB.js");
 
 let store = new Map();
+const env = {}
 
 function handlePing() {
   return "+PONG\r\n";
@@ -100,4 +101,12 @@ function loadRDBFile () {
 }
 
 loadRDBFile()
-server.listen(6379, "127.0.0.1");
+loadEnvs()
+server.listen(env['port'] ? env['port'] : 6379, "127.0.0.1");
+
+function loadEnvs() {
+  for(let i=2;i<process.argv.length;i = i+2) {
+    env[process.argv[i].split('--')[1]] = process.argv[i+1]
+  }
+
+}
