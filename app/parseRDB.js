@@ -3,7 +3,7 @@ const fs = require("fs");
 const db = {}
 
 //Reads RDB File
-const readRdbFile = () => {
+const readRdbFile = (store) => {
   const opCodes = {
     resizeDb: "fb",
   };
@@ -11,7 +11,7 @@ const readRdbFile = () => {
   const dirName = process.argv[3];
   const fileName = process.argv[5];
   const filePath = dirName + "/" + fileName;
-  console.log(`DIr: ${dirName} ,Filenamde :${fileName}`);
+  console.log(`DIr: ${dirName} ,Filename :${fileName}`);
   console.log(`Path`, filePath);
   const dataBuffer = fs.readFileSync(filePath);
   console.log("Hex data:", dataBuffer.toString("hex"));
@@ -53,14 +53,13 @@ const readRdbFile = () => {
     const valueLength = getNextObjLength();
     const value = getNextNBytes(valueLength);
     console.log("Key:", key.toString(), "value:", value.toString());
-    db[key] = value;
+    store.set(key.toString(), value.toString());
   };
   while (i < dataBuffer.length) {
     const currentHexByte = dataBuffer[i].toString(16);
     if (currentHexByte === opCodes.resizeDb) resizeDb();
     i++;
   }
-  return db
 }
 
 module.exports = { readRdbFile };

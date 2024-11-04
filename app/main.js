@@ -43,14 +43,12 @@ function handleConfig(configArgs) {
   }
 }
 
-function handleKeys(keyArgs) {
-  const db = readRdbFile();
-  const keys = Object.keys(db);
+function handleKeys() {
   let response = "";
-  for (let key of keys) {
+  for (let key of store.keys()) {
     response += `$${key.length}\r\n${key}\r\n`;
   }
-  return `*${keys.length}\r\n${response}`
+  return `*${store.size}\r\n${response}`
 }
 
 function commandResponse(commandString) {
@@ -67,7 +65,7 @@ function commandResponse(commandString) {
     case "CONFIG":
       return handleConfig(commandArray.slice(1));
     case "KEYS":
-      return handleKeys(commandArray.slice(1));
+      return handleKeys();
   }
 }
 
@@ -91,4 +89,6 @@ const server = net.createServer((connection) => {
     connection.write(commandResponse(command));
   });
 });
+readRdbFile(store)
+console.log(store)
 server.listen(6379, "127.0.0.1");
