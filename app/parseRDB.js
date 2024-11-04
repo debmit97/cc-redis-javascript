@@ -13,8 +13,9 @@ const readRdbFile = (store) => {
   const filePath = dirName + "/" + fileName;
   console.log(`DIr: ${dirName} ,Filename :${fileName}`);
   console.log(`Path`, filePath);
-  const dataBuffer = fs.readFileSync(filePath);
-  console.log("Hex data:", dataBuffer.toString("hex"));
+  try {
+    const dataBuffer = fs.readFileSync(filePath);
+    console.log("Hex data:", dataBuffer.toString("hex"));
   const getNextNBytes = (n) => {
     let nextNBytes = Buffer.alloc(n);
     for (let k = 0; k < n; k++) {
@@ -60,6 +61,11 @@ const readRdbFile = (store) => {
     if (currentHexByte === opCodes.resizeDb) resizeDb();
     i++;
   }
+  } catch (e) {
+    console.log(e)
+  }
+ 
+  
 }
 
 module.exports = { readRdbFile };
