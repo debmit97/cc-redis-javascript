@@ -1,8 +1,5 @@
 const fs = require("fs");
 
-const db = {}
-
-//Reads RDB File
 const readRdbFile = (store) => {
   const opCodes = {
     resizeDb: "fb",
@@ -11,19 +8,30 @@ const readRdbFile = (store) => {
   const dirName = process.argv[3];
   const fileName = process.argv[5];
   const filePath = dirName + "/" + fileName;
-  console.log(`DIr: ${dirName} ,Filename :${fileName}`);
-  console.log(`Path`, filePath);
+  let dataBuffer;
   try {
-    const dataBuffer = fs.readFileSync(filePath);
-    console.log("Hex data:", dataBuffer.toString("hex"));
+    dataBuffer = fs.readFileSync(filePath);
+  } catch (e) {
+    console.log("Error:", e);
+    return;
+  }
+  console.log("Hex data:", dataBuffer.toString("hex"));
+
+  /**
+   * @param {int} n - No. Of bytes to get
+   * @returns {Buffer} - Next n bytes
+   * */
   const getNextNBytes = (n) => {
     let nextNBytes = Buffer.alloc(n);
+
     for (let k = 0; k < n; k++) {
       nextNBytes[k] = dataBuffer[i];
       i++;
     }
+
     return nextNBytes;
   };
+
   const getNextObjLength = () => {
     const firstByte = dataBuffer[i];
     const twoBits = firstByte >> 6;
@@ -36,36 +44,40 @@ const readRdbFile = (store) => {
     }
     return length;
   };
-  const hashTable = () => {
-    const nextObjLength = getNextObjLength();
-    const nextNBytes = getNextNBytes(nextObjLength);
+
+  const getKeyValues = (n) => {
+    for (let j = 0; j < n; j++) {
+      const keyLength = getNextObjLength();
+      const key = getNextNBytes(keyLength).toString();
+      const valueLength = getNextObjLength();
+      const value = getNextNBytes(valueLength).toString();
+      console.log(`Setting ${key} to ${value}`);
+      store.set(key, value)
+			i++; // 00 padding.
+    }
   };
+
   const expiryHashTable = () => {
     const nextObjLength = getNextObjLength();
     const nextNBytes = getNextNBytes(nextObjLength);
   };
+
   const resizeDb = () => {
     console.log("Inside resizedb");
     i++;
-    hashTable();
-    expiryHashTable();
-    const keyLength = getNextObjLength();
-    const key = getNextNBytes(keyLength);
-    const valueLength = getNextObjLength();
-    const value = getNextNBytes(valueLength);
-    console.log("Key:", key.toString(), "value:", value.toString());
-    store.set(key.toString(), value.toString());
+    const totalKeyVal = getNextObjLength();
+    const totalExpiry = getNextObjLength();
+    i++; // There is 00 padding.
+    getKeyValues(totalKeyVal);
   };
+
   while (i < dataBuffer.length) {
     const currentHexByte = dataBuffer[i].toString(16);
     if (currentHexByte === opCodes.resizeDb) resizeDb();
     i++;
   }
-  } catch (e) {
-    console.log(e)
-  }
- 
-  
-}
+
+  return null;
+};
 
 module.exports = { readRdbFile };
