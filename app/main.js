@@ -55,6 +55,9 @@ function handleInfo(infoArgs) {
   const [section] = infoArgs
   switch(section.toUpperCase()) {
     case 'REPLICATION':
+      if(env.replicaof) {
+        return `$10\r\nrole:slave\r\n`
+      }
       return `$11\r\nrole:master\r\n`
   }
 }
@@ -118,5 +121,5 @@ function loadEnvs() {
   for(let i=2;i<process.argv.length;i = i+2) {
     env[process.argv[i].split('--')[1]] = process.argv[i+1]
   }
-
+  // console.log(env)
 }
