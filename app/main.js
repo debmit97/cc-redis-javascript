@@ -51,6 +51,14 @@ function handleKeys() {
   return `*${store.size}\r\n${response}`
 }
 
+function handleInfo(infoArgs) {
+  const [section] = infoArgs
+  switch(section.toUpperCase()) {
+    case 'REPLICATION':
+      return `$11\r\nrole:master\r\n`
+  }
+}
+
 function commandResponse(commandString) {
   const commandArray = commandString.split(" ");
   switch (commandArray[0].toUpperCase()) {
@@ -66,6 +74,8 @@ function commandResponse(commandString) {
       return handleConfig(commandArray.slice(1));
     case "KEYS":
       return handleKeys();
+    case "INFO":
+      return handleInfo(commandArray.slice(1));
   }
 }
 
