@@ -79,6 +79,8 @@ function commandResponse(commandString) {
       return handleKeys();
     case "INFO":
       return handleInfo(commandArray.slice(1));
+    default:
+      return "+OK\r\n";
   }
 }
 
@@ -101,6 +103,9 @@ const server = net.createServer((connection) => {
     const command = commandParser(data.toString());
     connection.write(commandResponse(command));
   });
+  connection.on('error', (e) => {
+    console.log(e)
+  })
 });
 
 function loadRDBFile () {
@@ -110,7 +115,6 @@ function loadRDBFile () {
   let rdbParser = new RDBParser(fileBuffer);
   rdbParser.parse();
   store = rdbParser.dataStore;
-  console.log(store)
 }
 
 loadRDBFile()
@@ -119,10 +123,21 @@ loadEnvs()
 if(env.replicaof) {
   const conn = net.createConnection({ host: env.replicaof.split(' ')[0], port: env.replicaof.split(' ')[1] })
   conn.write(`*1\r\n$4\r\nPING\r\n`)
+  conn.on('data', (data) => {
+    conn.write(`*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n${getPort()}\r\n`)
+    conn.write('*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n')
+    conn.end()
+  })
+  conn.on('error', (e) => {
+    console.log(e)
+  })
 }
 
-server.listen(env['port'] ? env['port'] : 6379, "127.0.0.1");
+server.listen(getPort(), "127.0.0.1");
 
+function getPort() {
+  return env['port'] ? env['port'] : 6379
+}
 
 
 function loadEnvs() {
