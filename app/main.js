@@ -1,9 +1,9 @@
 const net = require("net");
-const fs = require("fs")
+const fs = require("fs");
 const { RDBParser } = require("./parseRDB.js");
 
 let store = new Map();
-const env = {}
+const env = {};
 
 function handlePing() {
   return "+PONG\r\n";
@@ -15,18 +15,23 @@ function handleEcho(echoArg) {
 
 function handleSet(setArgs) {
   const [key, value] = setArgs;
-  store.set(key, {value});
+  store.set(key, { value });
   if (setArgs.length > 2) {
     if (setArgs[2].toUpperCase() === "PX") {
-      store.set(key, {value, expiration: Date.now()+parseInt(setArgs[3])});
-    } 
+      store.set(key, { value, expiration: Date.now() + parseInt(setArgs[3]) });
+    }
   }
   return "+OK\r\n";
 }
 
 function handleGet(getArg) {
   const [key] = getArg;
-  if (store.has(key) && (!store.get(key).expiration || (store.get(key).expiration && store.get(key).expiration > BigInt(Date.now())))) {
+  if (
+    store.has(key) &&
+    (!store.get(key).expiration ||
+      (store.get(key).expiration &&
+        store.get(key).expiration > BigInt(Date.now())))
+  ) {
     return `$${store.get(key).value.length}\r\n${store.get(key).value}\r\n`;
   }
   return `$-1\r\n`;
@@ -48,17 +53,17 @@ function handleKeys() {
   for (let key of store.keys()) {
     response += `$${key.length}\r\n${key}\r\n`;
   }
-  return `*${store.size}\r\n${response}`
+  return `*${store.size}\r\n${response}`;
 }
 
 function handleInfo(infoArgs) {
-  const [section] = infoArgs
-  switch(section.toUpperCase()) {
-    case 'REPLICATION':
-      if(env.replicaof) {
-        return `$10\r\nrole:slave\r\n`
+  const [section] = infoArgs;
+  switch (section.toUpperCase()) {
+    case "REPLICATION":
+      if (env.replicaof) {
+        return `$10\r\nrole:slave\r\n`;
       }
-      return `$89\r\nrole:master\r\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\r\nmaster_repl_offset:0\r\n`
+      return `$89\r\nrole:master\r\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\r\nmaster_repl_offset:0\r\n`;
   }
 }
 
@@ -96,19 +101,17 @@ function commandParser(commandString) {
   return string.trim();
 }
 
-
-
 const server = net.createServer((connection) => {
   connection.on("data", (data) => {
     const command = commandParser(data.toString());
     connection.write(commandResponse(command));
   });
-  connection.on('error', (e) => {
-    console.log(e)
-  })
+  connection.on("error", (e) => {
+    console.log(e);
+  });
 });
 
-function loadRDBFile () {
+function loadRDBFile() {
   let filePath = `${process.argv[3]}/${process.argv[5]}`;
   if (!fs.existsSync(filePath)) return;
   const fileBuffer = fs.readFileSync(filePath);
@@ -117,32 +120,40 @@ function loadRDBFile () {
   store = rdbParser.dataStore;
 }
 
-loadRDBFile()
-loadEnvs()
+loadRDBFile();
+loadEnvs();
 
-if(env.replicaof) {
-  const conn = net.createConnection({ host: env.replicaof.split(' ')[0], port: env.replicaof.split(' ')[1] })
-  conn.write(`*1\r\n$4\r\nPING\r\n`)
-  conn.on('data', (data) => {
-    conn.write(`*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n${getPort()}\r\n`)
-    conn.write('*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n')
-    conn.end()
-  })
-  conn.on('error', (e) => {
-    console.log(e)
-  })
+if (env.replicaof) {
+  const conn = net.createConnection(
+    { host: env.replicaof.split(" ")[0], port: env.replicaof.split(" ")[1] },
+    () => {
+      conn.write(`*1\r\n$4\r\nPING\r\n`);
+      conn.on("data", (data) => {
+        if (data.toString("utf-8") === "+PONG\r\n") {
+          conn.write(
+            `*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n${getPort()}\r\n`
+          );
+          conn.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n");
+        } else if (data.toString("utf-8") === "+OK\r\n") {
+          conn.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n");
+        }
+      });
+    }
+  );
+  conn.on("error", (e) => {
+    console.log(e);
+  });
 }
 
 server.listen(getPort(), "127.0.0.1");
 
 function getPort() {
-  return env['port'] ? env['port'] : 6379
+  return env["port"] ? env["port"] : 6379;
 }
 
-
 function loadEnvs() {
-  for(let i=2;i<process.argv.length;i = i+2) {
-    env[process.argv[i].split('--')[1]] = process.argv[i+1]
+  for (let i = 2; i < process.argv.length; i = i + 2) {
+    env[process.argv[i].split("--")[1]] = process.argv[i + 1];
   }
   // console.log(env)
 }
