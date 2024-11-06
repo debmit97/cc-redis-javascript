@@ -94,7 +94,7 @@ function commandParser(commandString) {
   return string.trim();
 }
 
-// // Uncomment this block to pass the first stage
+
 
 const server = net.createServer((connection) => {
   connection.on("data", (data) => {
@@ -115,7 +115,15 @@ function loadRDBFile () {
 
 loadRDBFile()
 loadEnvs()
+
+if(env.replicaof) {
+  const conn = net.createConnection({ host: env.replicaof.split(' ')[0], port: env.replicaof.split(' ')[1] })
+  conn.write(`*1\r\n$4\r\nPING\r\n`)
+}
+
 server.listen(env['port'] ? env['port'] : 6379, "127.0.0.1");
+
+
 
 function loadEnvs() {
   for(let i=2;i<process.argv.length;i = i+2) {
