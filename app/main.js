@@ -67,6 +67,10 @@ function handleInfo(infoArgs) {
   }
 }
 
+function handlePsync(psyncArgs) {
+  return '+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n'
+}
+
 function commandResponse(commandString) {
   const commandArray = commandString.split(" ");
   switch (commandArray[0].toUpperCase()) {
@@ -84,6 +88,8 @@ function commandResponse(commandString) {
       return handleKeys();
     case "INFO":
       return handleInfo(commandArray.slice(1));
+    case "PSYNC":
+      return handlePsync(commandArray.slice(1));
     default:
       return "+OK\r\n";
   }
