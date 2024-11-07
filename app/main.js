@@ -1,6 +1,7 @@
 const net = require("net");
 const fs = require("fs");
 const { RDBParser } = require("./parseRDB.js");
+const { parsedCommands } = require('./parseCommands.js')
 
 let store = new Map();
 const replicaConnections = []
@@ -125,7 +126,10 @@ function commandResponse(commandString, conn) {
       handlePsync(commandArray.slice(1), conn);
       break
     default:
-      conn.write("+OK\r\n");
+      if(!env.replicaof) {
+
+        conn.write("+OK\r\n");
+      }
   }
 }
 
@@ -176,8 +180,13 @@ if (env.replicaof) {
           conn.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n");
         } else if (data.toString("utf-8") === "+OK\r\n") {
           conn.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n");
-        } else if(data.toString('utf-8') === '+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n') {
-
+        } else {
+          if(data.toString('utf-8').startsWith('*')) {
+            for(const command of parsedCommands(data)) {
+              console.log(command)
+              commandResponse(command, conn)
+            }
+          }
         }
       });
     }
