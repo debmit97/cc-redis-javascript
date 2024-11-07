@@ -3,6 +3,7 @@ const fs = require("fs");
 const { RDBParser } = require("./parseRDB.js");
 
 let store = new Map();
+const replicaConnections = []
 const env = {};
 
 function handlePing(conn) {
@@ -13,6 +14,15 @@ function handleEcho(echoArg, conn) {
   conn.write(`$${echoArg[0].length}\r\n${echoArg[0]}\r\n`);
 }
 
+function stringToRespArray(commandString) {
+  const tokens = commandString.split(' ')
+  let resp = ''
+  for(const token of tokens) {
+    resp = resp+`$${token.length}\r\n${token}\r\n`
+  }
+  return `*${tokens.length}\r\n${resp}`
+}
+
 function handleSet(setArgs, conn) {
   const [key, value] = setArgs;
   store.set(key, { value });
@@ -21,7 +31,13 @@ function handleSet(setArgs, conn) {
       store.set(key, { value, expiration: Date.now() + parseInt(setArgs[3]) });
     }
   }
-  conn.write("+OK\r\n");
+  if(!env.replicaof) { // it is master instance
+
+    conn.write("+OK\r\n");
+    replicaConnections.forEach(replicaConnection => {
+      replicaConnection.write(stringToRespArray(`SET ${setArgs.join(' ')}`))
+    })
+  }
 }
 
 function handleGet(getArg, conn) {
@@ -36,6 +52,7 @@ function handleGet(getArg, conn) {
   } else {
 
     conn.write(`$-1\r\n`);
+    
   }
 }
 
@@ -77,6 +94,7 @@ function handlePsync(psyncArgs, conn) {
   const fileBuffer = Buffer.from(emptyRDBHex, 'hex')
   const lenBuffer = Buffer.from(`$${fileBuffer.length}\r\n`)
   conn.write(Buffer.concat([lenBuffer, fileBuffer]))
+  replicaConnections.push(conn)
 }
 
 function commandResponse(commandString, conn) {
@@ -158,6 +176,8 @@ if (env.replicaof) {
           conn.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n");
         } else if (data.toString("utf-8") === "+OK\r\n") {
           conn.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n");
+        } else if(data.toString('utf-8') === '+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n') {
+
         }
       });
     }
