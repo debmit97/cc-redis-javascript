@@ -5,15 +5,15 @@ const { RDBParser } = require("./parseRDB.js");
 let store = new Map();
 const env = {};
 
-function handlePing() {
-  return "+PONG\r\n";
+function handlePing(conn) {
+  conn.write("+PONG\r\n")
 }
 
-function handleEcho(echoArg) {
-  return `$${echoArg[0].length}\r\n${echoArg[0]}\r\n`;
+function handleEcho(echoArg, conn) {
+  conn.write(`$${echoArg[0].length}\r\n${echoArg[0]}\r\n`);
 }
 
-function handleSet(setArgs) {
+function handleSet(setArgs, conn) {
   const [key, value] = setArgs;
   store.set(key, { value });
   if (setArgs.length > 2) {
@@ -21,10 +21,10 @@ function handleSet(setArgs) {
       store.set(key, { value, expiration: Date.now() + parseInt(setArgs[3]) });
     }
   }
-  return "+OK\r\n";
+  conn.write("+OK\r\n");
 }
 
-function handleGet(getArg) {
+function handleGet(getArg, conn) {
   const [key] = getArg;
   if (
     store.has(key) &&
@@ -32,66 +32,78 @@ function handleGet(getArg) {
       (store.get(key).expiration &&
         store.get(key).expiration > BigInt(Date.now())))
   ) {
-    return `$${store.get(key).value.length}\r\n${store.get(key).value}\r\n`;
+    conn.write(`$${store.get(key).value.length}\r\n${store.get(key).value}\r\n`);
   }
-  return `$-1\r\n`;
+  conn.write(`$-1\r\n`);
 }
 
-function handleConfig(configArgs) {
+function handleConfig(configArgs, conn) {
   const [command, arg] = configArgs;
   if (command.toUpperCase() === "GET") {
     if (arg === "dir") {
-      return `*2\r\n$3\r\ndir\r\n$${process.argv[3].length}\r\n${process.argv[3]}\r\n`;
+      conn.write(`*2\r\n$3\r\ndir\r\n$${process.argv[3].length}\r\n${process.argv[3]}\r\n`);
     } else if (arg === "dbfilename") {
-      return `*2\r\n$10\r\ndbfilename\r\n$${process.argv[5].length}\r\n${process.argv[5]}\r\n`;
+      conn.write(`*2\r\n$10\r\ndbfilename\r\n$${process.argv[5].length}\r\n${process.argv[5]}\r\n`);
     }
   }
 }
 
-function handleKeys() {
+function handleKeys(conn) {
   let response = "";
   for (let key of store.keys()) {
     response += `$${key.length}\r\n${key}\r\n`;
   }
-  return `*${store.size}\r\n${response}`;
+  conn.write(`*${store.size}\r\n${response}`);
 }
 
-function handleInfo(infoArgs) {
+function handleInfo(infoArgs, conn) {
   const [section] = infoArgs;
   switch (section.toUpperCase()) {
     case "REPLICATION":
       if (env.replicaof) {
-        return `$10\r\nrole:slave\r\n`;
+        conn.write(`$10\r\nrole:slave\r\n`);
       }
-      return `$89\r\nrole:master\r\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\r\nmaster_repl_offset:0\r\n`;
+      conn.write(`$89\r\nrole:master\r\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\r\nmaster_repl_offset:0\r\n`);
   }
 }
 
-function handlePsync(psyncArgs) {
-  return '+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n'
+function handlePsync(psyncArgs, conn) {
+  conn.write('+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n')
+  const emptyRDBHex = '524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2'
+  const fileBuffer = Buffer.from(emptyRDBHex, 'hex')
+  const lenBuffer = Buffer.from(`$${fileBuffer.length}\r\n`)
+  conn.write(Buffer.concat([lenBuffer, fileBuffer]))
 }
 
-function commandResponse(commandString) {
+function commandResponse(commandString, conn) {
   const commandArray = commandString.split(" ");
   switch (commandArray[0].toUpperCase()) {
     case "PING":
-      return handlePing();
+      handlePing(conn)
+      break
     case "ECHO":
-      return handleEcho(commandArray.slice(1));
+      handleEcho(commandArray.slice(1), conn)
+      break
     case "SET":
-      return handleSet(commandArray.slice(1));
+      handleSet(commandArray.slice(1), conn);
+      break
     case "GET":
-      return handleGet(commandArray.slice(1));
+      handleGet(commandArray.slice(1), conn);
+      break
     case "CONFIG":
-      return handleConfig(commandArray.slice(1));
+      handleConfig(commandArray.slice(1), conn);
+      break
     case "KEYS":
-      return handleKeys();
+      handleKeys(conn);
+      break
     case "INFO":
-      return handleInfo(commandArray.slice(1));
+      handleInfo(commandArray.slice(1), conn);
+      break
     case "PSYNC":
-      return handlePsync(commandArray.slice(1));
+      handlePsync(commandArray.slice(1), conn);
+      break
     default:
-      return "+OK\r\n";
+      conn.write("+OK\r\n");
   }
 }
 
@@ -110,7 +122,7 @@ function commandParser(commandString) {
 const server = net.createServer((connection) => {
   connection.on("data", (data) => {
     const command = commandParser(data.toString());
-    connection.write(commandResponse(command));
+    commandResponse(command, connection)
   });
   connection.on("error", (e) => {
     console.log(e);
