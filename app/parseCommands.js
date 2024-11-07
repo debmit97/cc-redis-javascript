@@ -1,5 +1,8 @@
 function parsedCommands(data) {
-  const tokens = data.toString("utf-8").split("\r\n");
+  let tokens = data.toString("utf-8").split("\r\n");
+  if(!tokens[0].startsWith('*')) {
+    tokens = data.toString("utf-8").slice(data.toString("utf-8").indexOf('*')).split('\r\n')
+  }
   const commands = [];
   let currString = ''
   for (let i = 0; i < tokens.length; i++) {

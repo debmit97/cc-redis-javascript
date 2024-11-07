@@ -172,6 +172,7 @@ if (env.replicaof) {
     { host: env.replicaof.split(" ")[0], port: env.replicaof.split(" ")[1] },
     () => {
       conn.write(`*1\r\n$4\r\nPING\r\n`);
+      let sent = 0
       conn.on("data", (data) => {
         if (data.toString("utf-8") === "+PONG\r\n") {
           conn.write(
@@ -179,9 +180,16 @@ if (env.replicaof) {
           );
           conn.write("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n");
         } else if (data.toString("utf-8") === "+OK\r\n") {
-          conn.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n");
+          sent++
+          if(sent === 2) {
+
+            conn.write("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n");
+          }
+        } else if (data.toString('utf-8').split('\r\n').includes('REPLCONF')) {
+          conn.write("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n");
         } else {
-          if(data.toString('utf-8').startsWith('*')) {
+          console.log(data.toString('utf-8'))
+          if(data.toString('utf-8').startsWith('*') || data.toString('utf-8').includes('*')) {
             for(const command of parsedCommands(data)) {
               console.log(command)
               commandResponse(command, conn)
