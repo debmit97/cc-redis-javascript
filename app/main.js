@@ -33,8 +33,10 @@ function handleGet(getArg, conn) {
         store.get(key).expiration > BigInt(Date.now())))
   ) {
     conn.write(`$${store.get(key).value.length}\r\n${store.get(key).value}\r\n`);
+  } else {
+
+    conn.write(`$-1\r\n`);
   }
-  conn.write(`$-1\r\n`);
 }
 
 function handleConfig(configArgs, conn) {
@@ -62,8 +64,10 @@ function handleInfo(infoArgs, conn) {
     case "REPLICATION":
       if (env.replicaof) {
         conn.write(`$10\r\nrole:slave\r\n`);
+      } else {
+
+        conn.write(`$89\r\nrole:master\r\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\r\nmaster_repl_offset:0\r\n`);
       }
-      conn.write(`$89\r\nrole:master\r\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\r\nmaster_repl_offset:0\r\n`);
   }
 }
 
