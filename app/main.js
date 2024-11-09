@@ -111,6 +111,10 @@ function handlePsync(psyncArgs, conn) {
   replicaConnections.push(conn);
 }
 
+function handleWait(waitArgs, conn) {
+  conn.write(':0\r\n')
+}
+
 function commandResponse(commandString, conn) {
   const commandArray = commandString.split(" ");
   switch (commandArray[0].toUpperCase()) {
@@ -137,6 +141,9 @@ function commandResponse(commandString, conn) {
       break;
     case "PSYNC":
       handlePsync(commandArray.slice(1), conn);
+      break;
+    case "WAIT":
+      handleWait(commandArray.slice(1), conn);
       break;
     default:
       if (!env.replicaof) {
