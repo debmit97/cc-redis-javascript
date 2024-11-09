@@ -112,7 +112,7 @@ function handlePsync(psyncArgs, conn) {
 }
 
 function handleWait(waitArgs, conn) {
-  conn.write(':0\r\n')
+  conn.write(`:${replicaConnections.length}\r\n`)
 }
 
 function commandResponse(commandString, conn) {
