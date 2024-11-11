@@ -13,6 +13,13 @@ let store = new Map();
 const replicaConnections = [];
 const env = {};
 
+const replicationStatus = {
+  bytesProcessed: 0,
+  replicasAckCount: 0,
+  waitConn: null,
+  timer: null,
+};
+
 function handlePing(conn) {
   conn.write("+PONG\r\n");
 }
@@ -42,6 +49,10 @@ function handleSet(setArgs, conn) {
     // it is master instance
 
     conn.write("+OK\r\n");
+    replicationStatus.bytesProcessed =
+      replicationStatus.bytesProcessed +
+      stringToRespArray(`SET ${setArgs.join(" ")}`).length;
+
     replicaConnections.forEach((replicaConnection) => {
       replicaConnection.write(stringToRespArray(`SET ${setArgs.join(" ")}`));
     });
@@ -112,7 +123,49 @@ function handlePsync(psyncArgs, conn) {
 }
 
 function handleWait(waitArgs, conn) {
-  conn.write(`:${replicaConnections.length}\r\n`)
+  const [replicaWait, timeout] = waitArgs;
+  if (parseInt(replicaWait) === 0) {
+    conn.write(`:0\r\n`);
+  } else {
+    replicationStatus.replicasAckCount = 0;
+    replicationStatus.waitConn = conn;
+    replicationStatus.waitTarget = parseInt(replicaWait);
+
+    if (replicationStatus.bytesProcessed !== 0) {
+      replicaConnections.forEach((replicaConnection) => {
+        replicaConnection.write(stringToRespArray(`REPLCONF GETACK *`));
+      });
+    }
+
+    replicationStatus.timer = setTimeout(() => {
+      replicationStatus.waitConn.write(
+        `:${replicationStatus.bytesProcessed !== 0 ? replicationStatus.replicasAckCount : replicaConnections.length}\r\n`
+      );
+      clearTimeout(replicationStatus.timer);
+      replicationStatus.replicasAckCount = 0;
+    }, parseInt(timeout));
+  }
+}
+
+function handleReplConf(replConfArgs, conn) {
+  const [section, sectionArg] = replConfArgs;
+  if (section === "ACK") {
+    if (parseInt(sectionArg) >= replicationStatus.bytesProcessed) {
+      replicationStatus.replicasAckCount++;
+      if (replicationStatus.replicasAckCount === replicationStatus.waitTarget) {
+        replicationStatus.waitConn.write(
+          `:${replicationStatus.bytesProcessed !== 0 ? replicationStatus.replicasAckCount : replicaConnections.length}\r\n`
+        );
+        clearTimeout(replicationStatus.timer);
+        replicationStatus.replicasAckCount = 0;
+      }
+    }
+  } else {
+
+    if (!env.replicaof) {
+      conn.write("+OK\r\n");
+    }
+  }
 }
 
 function commandResponse(commandString, conn) {
@@ -144,6 +197,9 @@ function commandResponse(commandString, conn) {
       break;
     case "WAIT":
       handleWait(commandArray.slice(1), conn);
+      break;
+    case "REPLCONF":
+      handleReplConf(commandArray.slice(1), conn);
       break;
     default:
       if (!env.replicaof) {
@@ -210,7 +266,9 @@ if (env.replicaof) {
               );
               offset = offset + 37;
             } else {
+              
               for (const parsedCommand of parsedCommands(command)) {
+                console.log(parsedCommand)
                 commandResponse(parsedCommand, conn);
               }
               offset = offset + command.length;
