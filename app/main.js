@@ -161,7 +161,6 @@ function handleReplConf(replConfArgs, conn) {
       }
     }
   } else {
-
     if (!env.replicaof) {
       conn.write("+OK\r\n");
     }
