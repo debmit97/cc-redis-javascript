@@ -167,6 +167,17 @@ function handleReplConf(replConfArgs, conn) {
   }
 }
 
+function handleType(typeArgs, conn) {
+  const [key] = typeArgs
+  console.log(key)
+  if(store.has(key)) {
+
+    conn.write(toRespSimpleString(typeof store.get(key).value))
+  } else {
+    conn.write(toRespSimpleString('none'))
+  }
+}
+
 function commandResponse(commandString, conn) {
   const commandArray = commandString.split(" ");
   switch (commandArray[0].toUpperCase()) {
@@ -199,6 +210,9 @@ function commandResponse(commandString, conn) {
       break;
     case "REPLCONF":
       handleReplConf(commandArray.slice(1), conn);
+      break;
+    case "TYPE":
+      handleType(commandArray.slice(1), conn);
       break;
     default:
       if (!env.replicaof) {
