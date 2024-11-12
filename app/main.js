@@ -11,7 +11,7 @@ const {
 
 const { getStream, RedisStream } = require('./stream.js')
 
-const store = new Map();
+let store = new Map();
 const replicaConnections = [];
 const env = {};
 
