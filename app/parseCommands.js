@@ -21,6 +21,10 @@ function parsedCommands(data) {
   return commands;
 }
 
+function toSimpleError(string) {
+  return `-${string}\r\n`;
+}
+
 function toRespSimpleString(string) {
   return `+${string}\r\n`;
 }
@@ -57,4 +61,5 @@ module.exports = {
   toBulkString,
   toArray,
   separateTCPSegment,
+  toSimpleError,
 };
