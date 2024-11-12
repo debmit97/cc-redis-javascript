@@ -9,7 +9,9 @@ const {
   separateTCPSegment,
 } = require("./parseCommands.js");
 
-let store = new Map();
+const { getStream, RedisStream } = require('./stream.js')
+
+const store = new Map();
 const replicaConnections = [];
 const env = {};
 
@@ -36,6 +38,7 @@ function stringToRespArray(commandString) {
   }
   return `*${tokens.length}\r\n${resp}`;
 }
+
 
 function handleSet(setArgs, conn) {
   const [key, value] = setArgs;
@@ -169,11 +172,11 @@ function handleReplConf(replConfArgs, conn) {
 
 function handleType(typeArgs, conn) {
   const [key] = typeArgs
-  console.log(key)
   if(store.has(key)) {
-
     conn.write(toRespSimpleString(typeof store.get(key).value))
-  } else {
+  } else if (getStream().streamName === key) {
+    conn.write(toRespSimpleString('stream'))
+  }else {
     conn.write(toRespSimpleString('none'))
   }
 }
@@ -213,6 +216,9 @@ function commandResponse(commandString, conn) {
       break;
     case "TYPE":
       handleType(commandArray.slice(1), conn);
+      break;
+    case "XADD":
+      getStream().handleXADD(commandArray.slice(1), conn)
       break;
     default:
       if (!env.replicaof) {
