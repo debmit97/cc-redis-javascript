@@ -59,14 +59,46 @@ class RedisStream {
     }
 
     handleXRange(xRangeArgs, conn) {
+
+        function filterRange(startId, endId, id) {
+            if(parseInt(id.split('-')[0]) >= parseInt(startId.split('-')[0]) && parseInt(id.split('-')[1]) >= parseInt(startId.split('-')[1]) && parseInt(id.split('-')[0]) <= parseInt(endId.split('-')[0]) && parseInt(id.split('-')[1]) <= parseInt(endId.split('-')[1])) {
+                return true
+            }
+            return false
+        }
+
+        
+
         if(xRangeArgs[0] === this.streamName) {
-            const start = xRangeArgs[1] ? parseInt(xRangeArgs[1]) : 0
-            const end = xRangeArgs[2] ? parseInt(xRangeArgs[2]) : 0
-            const keys = Object.keys(this.streamData).filter(id => parseInt(id.split('-')[0]) >= start && (end === 0 ? true : parseInt(id.split('-')[0]) <= end))
-            console.log(keys)
-            conn.write('')
+            const startId = xRangeArgs[1]
+            const endId = xRangeArgs[2]
+            const keys = Object.keys(this.streamData).filter(id => filterRange(startId, endId, id))
+            conn.write(this.formatInnerKeys(keys))
         }
     }
+
+    formatInnerKeys(keys) {
+        let resp = ''
+        for(let key of keys) {
+            resp = resp + `${objectToArray({ [key]: this.streamData[key]})}`
+        }
+        return `*${keys.length}\r\n${resp}`
+    }
+}
+
+
+
+function objectToArray(obj) {
+    let resp = ''
+    for(let key of Object.keys(obj)) {
+        resp = resp + `$${key.length}\r\n${key}\r\n`
+        if(typeof obj[key] === 'object') {
+            resp = resp + objectToArray(obj[key])
+        } else {
+            resp = resp + `$${obj[key].length}\r\n${obj[key]}\r\n`
+        }
+    }
+    return `*${Object.keys(obj).length*2}\r\n${resp}`
 }
 
 function getStream() {
