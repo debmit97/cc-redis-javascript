@@ -31,6 +31,10 @@ class RedisStream {
             return parseInt(a.split('-')[1]) > parseInt(b.split('-')[1])
         }
 
+        if(key === '*') {
+            return `${Date.now()}-0`
+        }
+
         if(key.split('-')[1] === '*') {
             const keyMilliSec = parseInt(key.split('-')[0])
             const keys = Object.keys(this.streamData).filter(id => parseInt(id.split('-')[0]) === keyMilliSec).sort(idSort)
