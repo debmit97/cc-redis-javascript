@@ -57,6 +57,16 @@ class RedisStream {
             conn.write(toBulkString(id))
         }
     }
+
+    handleXRange(xRangeArgs, conn) {
+        if(xRangeArgs[0] === this.streamName) {
+            const start = xRangeArgs[1] ? parseInt(xRangeArgs[1]) : 0
+            const end = xRangeArgs[2] ? parseInt(xRangeArgs[2]) : 0
+            const keys = Object.keys(this.streamData).filter(id => parseInt(id.split('-')[0]) >= start && (end === 0 ? true : parseInt(id.split('-')[0]) <= end))
+            console.log(keys)
+            conn.write('')
+        }
+    }
 }
 
 function getStream() {

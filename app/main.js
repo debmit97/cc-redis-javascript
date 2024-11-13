@@ -9,7 +9,7 @@ const {
   separateTCPSegment,
 } = require("./parseCommands.js");
 
-const { getStream, RedisStream } = require('./stream.js')
+const { getStream, RedisStream } = require("./stream.js");
 
 let store = new Map();
 const replicaConnections = [];
@@ -38,7 +38,6 @@ function stringToRespArray(commandString) {
   }
   return `*${tokens.length}\r\n${resp}`;
 }
-
 
 function handleSet(setArgs, conn) {
   const [key, value] = setArgs;
@@ -142,7 +141,11 @@ function handleWait(waitArgs, conn) {
 
     replicationStatus.timer = setTimeout(() => {
       replicationStatus.waitConn.write(
-        `:${replicationStatus.bytesProcessed !== 0 ? replicationStatus.replicasAckCount : replicaConnections.length}\r\n`
+        `:${
+          replicationStatus.bytesProcessed !== 0
+            ? replicationStatus.replicasAckCount
+            : replicaConnections.length
+        }\r\n`
       );
       clearTimeout(replicationStatus.timer);
       replicationStatus.replicasAckCount = 0;
@@ -157,7 +160,11 @@ function handleReplConf(replConfArgs, conn) {
       replicationStatus.replicasAckCount++;
       if (replicationStatus.replicasAckCount === replicationStatus.waitTarget) {
         replicationStatus.waitConn.write(
-          `:${replicationStatus.bytesProcessed !== 0 ? replicationStatus.replicasAckCount : replicaConnections.length}\r\n`
+          `:${
+            replicationStatus.bytesProcessed !== 0
+              ? replicationStatus.replicasAckCount
+              : replicaConnections.length
+          }\r\n`
         );
         clearTimeout(replicationStatus.timer);
         replicationStatus.replicasAckCount = 0;
@@ -171,13 +178,13 @@ function handleReplConf(replConfArgs, conn) {
 }
 
 function handleType(typeArgs, conn) {
-  const [key] = typeArgs
-  if(store.has(key)) {
-    conn.write(toRespSimpleString(typeof store.get(key).value))
+  const [key] = typeArgs;
+  if (store.has(key)) {
+    conn.write(toRespSimpleString(typeof store.get(key).value));
   } else if (getStream().streamName === key) {
-    conn.write(toRespSimpleString('stream'))
-  }else {
-    conn.write(toRespSimpleString('none'))
+    conn.write(toRespSimpleString("stream"));
+  } else {
+    conn.write(toRespSimpleString("none"));
   }
 }
 
@@ -218,7 +225,10 @@ function commandResponse(commandString, conn) {
       handleType(commandArray.slice(1), conn);
       break;
     case "XADD":
-      getStream().handleXADD(commandArray.slice(1), conn)
+      getStream().handleXADD(commandArray.slice(1), conn);
+      break;
+    case "XRANGE":
+      getStream().handleXRange(commandArray.slice(1), conn);
       break;
     default:
       if (!env.replicaof) {
@@ -285,9 +295,8 @@ if (env.replicaof) {
               );
               offset = offset + 37;
             } else {
-              
               for (const parsedCommand of parsedCommands(command)) {
-                console.log(parsedCommand)
+                console.log(parsedCommand);
                 commandResponse(parsedCommand, conn);
               }
               offset = offset + command.length;
