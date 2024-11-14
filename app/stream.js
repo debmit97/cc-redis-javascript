@@ -70,6 +70,13 @@ class RedisStream {
                 return false
             }
 
+            if(endId === '+') {
+                if(parseInt(id.split('-')[0]) >= parseInt(startId.split('-')[0]) && parseInt(id.split('-')[1]) >= parseInt(startId.split('-')[1])) {
+                    return true
+                }
+                return false
+            }
+
             if(parseInt(id.split('-')[0]) >= parseInt(startId.split('-')[0]) && parseInt(id.split('-')[1]) >= parseInt(startId.split('-')[1]) && parseInt(id.split('-')[0]) <= parseInt(endId.split('-')[0]) && parseInt(id.split('-')[1]) <= parseInt(endId.split('-')[1])) {
                 return true
             }
