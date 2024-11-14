@@ -59,6 +59,24 @@ class RedisStream {
         }
     }
 
+    handleXread(xReadArgs, conn) {
+        function filterRange(startId, id) {
+
+            if(parseInt(id.split('-')[0]) > parseInt(startId.split('-')[0]) || (parseInt(id.split('-')[0]) === parseInt(startId.split('-')[0]) && parseInt(id.split('-')[1]) > parseInt(startId.split('-')[1]))) {
+                return true
+            }
+            return false
+        }
+
+        
+
+        if(xReadArgs[1] === this.streamName) {
+            const startId = xReadArgs[2]
+            const keys = Object.keys(this.streamData).filter(id => filterRange(startId, id))
+            conn.write(this.formatXreadInnerKeys(keys))
+        }
+    }
+
     handleXRange(xRangeArgs, conn) {
 
         function filterRange(startId, endId, id) {
@@ -91,6 +109,14 @@ class RedisStream {
             const keys = Object.keys(this.streamData).filter(id => filterRange(startId, endId, id))
             conn.write(this.formatInnerKeys(keys))
         }
+    }
+
+    formatXreadInnerKeys(keys) {
+        let resp = ''
+        for(let key of keys) {
+            resp = resp + `${objectToArray({ [key]: this.streamData[key]})}`
+        }
+        return `*1\r\n*2\r\n$${this.streamName.length}\r\n${this.streamName}\r\n*${keys.length}\r\n${resp}`
     }
 
     formatInnerKeys(keys) {

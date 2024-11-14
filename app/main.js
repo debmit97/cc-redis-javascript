@@ -230,6 +230,9 @@ function commandResponse(commandString, conn) {
     case "XRANGE":
       getStream().handleXRange(commandArray.slice(1), conn);
       break;
+    case "XREAD":
+      getStream().handleXread(commandArray.slice(1), conn);
+      break;
     default:
       if (!env.replicaof) {
         conn.write("+OK\r\n");
