@@ -44,6 +44,7 @@ class RedisStream {
                 return `${key.split('-')[0]}-${parseInt(key.split('-')[0]) === 0 ? 1 : 0}`
             }
         }
+
         return key
     }
 
@@ -61,6 +62,14 @@ class RedisStream {
     handleXRange(xRangeArgs, conn) {
 
         function filterRange(startId, endId, id) {
+
+            if(startId === '-') {
+                if(parseInt(id.split('-')[0]) <= parseInt(endId.split('-')[0]) && parseInt(id.split('-')[1]) <= parseInt(endId.split('-')[1])) {
+                    return true
+                } 
+                return false
+            }
+
             if(parseInt(id.split('-')[0]) >= parseInt(startId.split('-')[0]) && parseInt(id.split('-')[1]) >= parseInt(startId.split('-')[1]) && parseInt(id.split('-')[0]) <= parseInt(endId.split('-')[0]) && parseInt(id.split('-')[1]) <= parseInt(endId.split('-')[1])) {
                 return true
             }
