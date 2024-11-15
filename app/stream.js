@@ -78,7 +78,7 @@ class RedisStream {
     if (xReadArgs[0].toUpperCase() === "BLOCK") {
       const blockPeriod = xReadArgs[1];
 
-      if(blockPeriod !== 0) {
+      if(blockPeriod !== '0') {
 
           const nowString = this.getXreadResp(xReadArgs.slice(2))
           setTimeout((nowString, conn) => {
