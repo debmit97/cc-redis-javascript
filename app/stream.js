@@ -95,7 +95,6 @@ class RedisStream {
           timer = setInterval((nowString, conn) => {
             const newString = this.getXreadResp(xReadArgs.slice(2));
             if(newString !== nowString) {
-                console.log(newString, nowString)
                 conn.write(newString)
                 clearInterval(timer)
             } 
