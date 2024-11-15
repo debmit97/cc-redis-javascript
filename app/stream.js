@@ -74,6 +74,24 @@ class RedisStream {
   }
 
   handleXread(xReadArgs, conn) {
+    if (xReadArgs[0].toUpperCase() === "BLOCK") {
+      const blockPeriod = xReadArgs[1];
+      const nowString = this.getXreadResp(xReadArgs.slice(2))
+      setTimeout((nowString, conn) => {
+        const newString = this.getXreadResp(xReadArgs.slice(2));
+        if(newString === nowString) {
+            conn.write('$-1\r\n')
+        } else {
+
+            conn.write(newString)
+        }
+      }, blockPeriod, nowString, conn);
+    } else {
+      conn.write(this.getXreadResp(xReadArgs));
+    }
+  }
+
+  getXreadResp(xReadArgs) {
     function filterRange(startId, id) {
       if (
         parseInt(id.split("-")[0]) > parseInt(startId.split("-")[0]) ||
@@ -88,7 +106,11 @@ class RedisStream {
     const streams = [];
     const args = [];
 
-    for (let i = 1; i < xReadArgs.length; i++) {
+    for (
+      let i = xReadArgs.findIndex((e) => e === "streams") + 1;
+      i < xReadArgs.length;
+      i++
+    ) {
       if (xReadArgs[i].includes("-")) {
         args.push(xReadArgs[i]);
       } else {
@@ -96,17 +118,16 @@ class RedisStream {
       }
     }
 
-    let resp = ''
+    let resp = "";
     for (let i = 0; i < streams.length; i++) {
       const startId = args[i];
-      console.log(this.streamData, streams[i], args[i])
       const keys = Object.keys(this.streamData[streams[i]]).filter((id) =>
         filterRange(startId, id)
       );
       resp = resp + this.formatXreadInnerKeys(keys, streams[i]);
     }
 
-    conn.write(`*${streams.length}\r\n${resp}`);
+    return `*${streams.length}\r\n${resp}`
   }
 
   handleXRange(xRangeArgs, conn) {
@@ -151,17 +172,17 @@ class RedisStream {
   }
 
   formatXreadInnerKeys(keys, stream) {
-    let resp = ''
-        for(let key of keys) {
-            resp = resp + `${objectToArray({ [key]: this.streamData[stream][key]})}`
-        }
-        return `*2\r\n$${stream.length}\r\n${stream}\r\n*${keys.length}\r\n${resp}`
+    let resp = "";
+    for (let key of keys) {
+      resp = resp + `${objectToArray({ [key]: this.streamData[stream][key] })}`;
+    }
+    return `*2\r\n$${stream.length}\r\n${stream}\r\n*${keys.length}\r\n${resp}`;
   }
 
   formatInnerKeys(keys, stream) {
     let resp = "";
     for (let key of keys) {
-      resp = resp + `${objectToArray({ [key]: this.streamData[stream][key]})}`;
+      resp = resp + `${objectToArray({ [key]: this.streamData[stream][key] })}`;
     }
     return `*${keys.length}\r\n${resp}`;
   }
