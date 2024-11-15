@@ -1,6 +1,7 @@
 const { toBulkString, toSimpleError } = require("./parseCommands");
 
 let stream = null;
+let timer = null
 
 class RedisStream {
   streamData = {};
@@ -76,16 +77,28 @@ class RedisStream {
   handleXread(xReadArgs, conn) {
     if (xReadArgs[0].toUpperCase() === "BLOCK") {
       const blockPeriod = xReadArgs[1];
-      const nowString = this.getXreadResp(xReadArgs.slice(2))
-      setTimeout((nowString, conn) => {
-        const newString = this.getXreadResp(xReadArgs.slice(2));
-        if(newString === nowString) {
-            conn.write('$-1\r\n')
-        } else {
 
+      if(blockPeriod !== 0) {
+
+          const nowString = this.getXreadResp(xReadArgs.slice(2))
+          setTimeout((nowString, conn) => {
+            const newString = this.getXreadResp(xReadArgs.slice(2));
+            if(newString === nowString) {
+                conn.write('$-1\r\n')
+            } else {
+    
+                conn.write(newString)
+            }
+          }, blockPeriod, nowString, conn);
+      } else {
+        const nowString = this.getXreadResp(xReadArgs.slice(2))
+          timer = setInterval((nowString, conn) => {
+            const newString = this.getXreadResp(xReadArgs.slice(2));
             conn.write(newString)
-        }
-      }, blockPeriod, nowString, conn);
+            clearInterval(timer)
+          }, 1000, nowString, conn);
+      }
+
     } else {
       conn.write(this.getXreadResp(xReadArgs));
     }
