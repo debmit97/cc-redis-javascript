@@ -97,7 +97,7 @@ class RedisStream {
             if(newString === nowString) {
                 conn.write('$-1\r\n')
             } else {
-    
+                console.log(newString, nowString)
                 conn.write(newString)
                 clearInterval(timer)
             }
