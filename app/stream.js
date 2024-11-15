@@ -94,13 +94,11 @@ class RedisStream {
         const nowString = this.getXreadResp(xReadArgs.slice(2))
           timer = setInterval((nowString, conn) => {
             const newString = this.getXreadResp(xReadArgs.slice(2));
-            if(newString === nowString) {
-                conn.write('$-1\r\n')
-            } else {
+            if(newString !== nowString) {
                 console.log(newString, nowString)
                 conn.write(newString)
                 clearInterval(timer)
-            }
+            } 
           }, 1000, nowString, conn);
       }
 
