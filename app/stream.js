@@ -1,153 +1,190 @@
-const { toBulkString, toSimpleError } = require('./parseCommands')
+const { toBulkString, toSimpleError } = require("./parseCommands");
 
-let stream = null
+let stream = null;
 
 class RedisStream {
-    streamName = ''
-    streamData = {}
-    lastEntryKey = '0-0'
+  streamData = {};
+  lastEntryKey = "0-0";
 
-    validateXAdd(key, conn) {
-        if(key.split('-')[1] === '*') {
-            return true
-        }
-        const keyMilliSec = parseInt(key.split('-')[0])
-        const keySeq = parseInt(key.split('-')[1])
-        const lastMilliSec = parseInt(this.lastEntryKey.split('-')[0])
-        const lastSeq = parseInt(this.lastEntryKey.split('-')[1])
-        if(keyMilliSec === 0 && keySeq === 0) {
-            conn.write(toSimpleError('ERR The ID specified in XADD must be greater than 0-0'))
-            return false
-        } else if (keyMilliSec < lastMilliSec || keyMilliSec === lastMilliSec && keySeq <= lastSeq) {
-            conn.write(toSimpleError('ERR The ID specified in XADD is equal or smaller than the target stream top item'))
-            return false
-        }
-        return true
+  validateXAdd(key, conn) {
+    if (key.split("-")[1] === "*") {
+      return true;
+    }
+    const keyMilliSec = parseInt(key.split("-")[0]);
+    const keySeq = parseInt(key.split("-")[1]);
+    const lastMilliSec = parseInt(this.lastEntryKey.split("-")[0]);
+    const lastSeq = parseInt(this.lastEntryKey.split("-")[1]);
+    if (keyMilliSec === 0 && keySeq === 0) {
+      conn.write(
+        toSimpleError("ERR The ID specified in XADD must be greater than 0-0")
+      );
+      return false;
+    } else if (
+      keyMilliSec < lastMilliSec ||
+      (keyMilliSec === lastMilliSec && keySeq <= lastSeq)
+    ) {
+      conn.write(
+        toSimpleError(
+          "ERR The ID specified in XADD is equal or smaller than the target stream top item"
+        )
+      );
+      return false;
+    }
+    return true;
+  }
+
+  autoGenEntryId(key, streamName) {
+    function idSort(a, b) {
+      return parseInt(a.split("-")[1]) > parseInt(b.split("-")[1]);
     }
 
-    autoGenEntryId(key) {
-
-        function idSort(a, b) {
-            return parseInt(a.split('-')[1]) > parseInt(b.split('-')[1])
-        }
-
-        if(key === '*') {
-            return `${Date.now()}-0`
-        }
-
-        if(key.split('-')[1] === '*') {
-            const keyMilliSec = parseInt(key.split('-')[0])
-            const keys = Object.keys(this.streamData).filter(id => parseInt(id.split('-')[0]) === keyMilliSec).sort(idSort)
-            if(keys.length) {
-                return `${keys[keys.length-1].split('-')[0]}-${parseInt(keys[keys.length-1].split('-')[1])+1}`
-            } else {
-                return `${key.split('-')[0]}-${parseInt(key.split('-')[0]) === 0 ? 1 : 0}`
-            }
-        }
-
-        return key
+    if (key === "*") {
+      return `${Date.now()}-0`;
     }
 
-    handleXADD(xAddArgs, conn) {
-        if(this.validateXAdd(xAddArgs[1], conn)) {
-
-            this.streamName = xAddArgs[0]
-            const id = this.autoGenEntryId(xAddArgs[1])
-            this.streamData[id] = { [xAddArgs[2]]: xAddArgs[3] }
-            this.lastEntryKey = id
-            conn.write(toBulkString(id))
-        }
+    if (key.split("-")[1] === "*") {
+      const keyMilliSec = parseInt(key.split("-")[0]);
+      const keys = Object.keys(this.streamData[streamName])
+        .filter((id) => parseInt(id.split("-")[0]) === keyMilliSec)
+        .sort(idSort);
+      if (keys.length) {
+        return `${keys[keys.length - 1].split("-")[0]}-${
+          parseInt(keys[keys.length - 1].split("-")[1]) + 1
+        }`;
+      } else {
+        return `${key.split("-")[0]}-${
+          parseInt(key.split("-")[0]) === 0 ? 1 : 0
+        }`;
+      }
     }
 
-    handleXread(xReadArgs, conn) {
-        function filterRange(startId, id) {
+    return key;
+  }
 
-            if(parseInt(id.split('-')[0]) > parseInt(startId.split('-')[0]) || (parseInt(id.split('-')[0]) === parseInt(startId.split('-')[0]) && parseInt(id.split('-')[1]) > parseInt(startId.split('-')[1]))) {
-                return true
-            }
-            return false
-        }
+  handleXADD(xAddArgs, conn) {
+    if (this.validateXAdd(xAddArgs[1], conn)) {
+      if (!this.streamData[xAddArgs[0]]) {
+        this.streamData[xAddArgs[0]] = {};
+      }
+      const id = this.autoGenEntryId(xAddArgs[1], xAddArgs[0]);
+      this.streamData[xAddArgs[0]][id] = { [xAddArgs[2]]: xAddArgs[3] };
+      this.lastEntryKey = id;
+      conn.write(toBulkString(id));
+    }
+  }
 
-        
-
-        if(xReadArgs[1] === this.streamName) {
-            const startId = xReadArgs[2]
-            const keys = Object.keys(this.streamData).filter(id => filterRange(startId, id))
-            conn.write(this.formatXreadInnerKeys(keys))
-        }
+  handleXread(xReadArgs, conn) {
+    function filterRange(startId, id) {
+      if (
+        parseInt(id.split("-")[0]) > parseInt(startId.split("-")[0]) ||
+        (parseInt(id.split("-")[0]) === parseInt(startId.split("-")[0]) &&
+          parseInt(id.split("-")[1]) > parseInt(startId.split("-")[1]))
+      ) {
+        return true;
+      }
+      return false;
     }
 
-    handleXRange(xRangeArgs, conn) {
+    const streams = [];
+    const args = [];
 
-        function filterRange(startId, endId, id) {
-
-            if(startId === '-') {
-                if(parseInt(id.split('-')[0]) <= parseInt(endId.split('-')[0]) && parseInt(id.split('-')[1]) <= parseInt(endId.split('-')[1])) {
-                    return true
-                } 
-                return false
-            }
-
-            if(endId === '+') {
-                if(parseInt(id.split('-')[0]) >= parseInt(startId.split('-')[0]) && parseInt(id.split('-')[1]) >= parseInt(startId.split('-')[1])) {
-                    return true
-                }
-                return false
-            }
-
-            if(parseInt(id.split('-')[0]) >= parseInt(startId.split('-')[0]) && parseInt(id.split('-')[1]) >= parseInt(startId.split('-')[1]) && parseInt(id.split('-')[0]) <= parseInt(endId.split('-')[0]) && parseInt(id.split('-')[1]) <= parseInt(endId.split('-')[1])) {
-                return true
-            }
-            return false
-        }
-
-        
-
-        if(xRangeArgs[0] === this.streamName) {
-            const startId = xRangeArgs[1]
-            const endId = xRangeArgs[2]
-            const keys = Object.keys(this.streamData).filter(id => filterRange(startId, endId, id))
-            conn.write(this.formatInnerKeys(keys))
-        }
+    for (let i = 1; i < xReadArgs.length; i++) {
+      if (xReadArgs[i].includes("-")) {
+        args.push(xReadArgs[i]);
+      } else {
+        streams.push(xReadArgs[i]);
+      }
     }
 
-    formatXreadInnerKeys(keys) {
-        let resp = ''
+    let resp = ''
+    for (let i = 0; i < streams.length; i++) {
+      const startId = args[i];
+      console.log(this.streamData, streams[i], args[i])
+      const keys = Object.keys(this.streamData[streams[i]]).filter((id) =>
+        filterRange(startId, id)
+      );
+      resp = resp + this.formatXreadInnerKeys(keys, streams[i]);
+    }
+
+    conn.write(`*${streams.length}\r\n${resp}`);
+  }
+
+  handleXRange(xRangeArgs, conn) {
+    function filterRange(startId, endId, id) {
+      if (startId === "-") {
+        if (
+          parseInt(id.split("-")[0]) <= parseInt(endId.split("-")[0]) &&
+          parseInt(id.split("-")[1]) <= parseInt(endId.split("-")[1])
+        ) {
+          return true;
+        }
+        return false;
+      }
+
+      if (endId === "+") {
+        if (
+          parseInt(id.split("-")[0]) >= parseInt(startId.split("-")[0]) &&
+          parseInt(id.split("-")[1]) >= parseInt(startId.split("-")[1])
+        ) {
+          return true;
+        }
+        return false;
+      }
+
+      if (
+        parseInt(id.split("-")[0]) >= parseInt(startId.split("-")[0]) &&
+        parseInt(id.split("-")[1]) >= parseInt(startId.split("-")[1]) &&
+        parseInt(id.split("-")[0]) <= parseInt(endId.split("-")[0]) &&
+        parseInt(id.split("-")[1]) <= parseInt(endId.split("-")[1])
+      ) {
+        return true;
+      }
+      return false;
+    }
+
+    const startId = xRangeArgs[1];
+    const endId = xRangeArgs[2];
+    const keys = Object.keys(this.streamData[xRangeArgs[0]]).filter((id) =>
+      filterRange(startId, endId, id)
+    );
+    conn.write(this.formatInnerKeys(keys, xRangeArgs[0]));
+  }
+
+  formatXreadInnerKeys(keys, stream) {
+    let resp = ''
         for(let key of keys) {
-            resp = resp + `${objectToArray({ [key]: this.streamData[key]})}`
+            resp = resp + `${objectToArray({ [key]: this.streamData[stream][key]})}`
         }
-        return `*1\r\n*2\r\n$${this.streamName.length}\r\n${this.streamName}\r\n*${keys.length}\r\n${resp}`
-    }
+        return `*2\r\n$${stream.length}\r\n${stream}\r\n*${keys.length}\r\n${resp}`
+  }
 
-    formatInnerKeys(keys) {
-        let resp = ''
-        for(let key of keys) {
-            resp = resp + `${objectToArray({ [key]: this.streamData[key]})}`
-        }
-        return `*${keys.length}\r\n${resp}`
+  formatInnerKeys(keys, stream) {
+    let resp = "";
+    for (let key of keys) {
+      resp = resp + `${objectToArray({ [key]: this.streamData[stream][key]})}`;
     }
+    return `*${keys.length}\r\n${resp}`;
+  }
 }
 
-
-
 function objectToArray(obj) {
-    let resp = ''
-    for(let key of Object.keys(obj)) {
-        resp = resp + `$${key.length}\r\n${key}\r\n`
-        if(typeof obj[key] === 'object') {
-            resp = resp + objectToArray(obj[key])
-        } else {
-            resp = resp + `$${obj[key].length}\r\n${obj[key]}\r\n`
-        }
+  let resp = "";
+  for (let key of Object.keys(obj)) {
+    resp = resp + `$${key.length}\r\n${key}\r\n`;
+    if (typeof obj[key] === "object") {
+      resp = resp + objectToArray(obj[key]);
+    } else {
+      resp = resp + `$${obj[key].length}\r\n${obj[key]}\r\n`;
     }
-    return `*${Object.keys(obj).length*2}\r\n${resp}`
+  }
+  return `*${Object.keys(obj).length * 2}\r\n${resp}`;
 }
 
 function getStream() {
-    if(!stream) {
-        stream = new RedisStream()
-    }
-    return stream
+  if (!stream) {
+    stream = new RedisStream();
+  }
+  return stream;
 }
 
-module.exports = { getStream, RedisStream }
+module.exports = { getStream, RedisStream };

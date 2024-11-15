@@ -181,7 +181,7 @@ function handleType(typeArgs, conn) {
   const [key] = typeArgs;
   if (store.has(key)) {
     conn.write(toRespSimpleString(typeof store.get(key).value));
-  } else if (getStream().streamName === key) {
+  } else if (Object.keys(getStream().streamData).includes(key)) {
     conn.write(toRespSimpleString("stream"));
   } else {
     conn.write(toRespSimpleString("none"));
