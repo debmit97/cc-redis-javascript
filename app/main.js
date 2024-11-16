@@ -213,6 +213,9 @@ function handleMulti(conn) {
 function handleExec(conn) {
   if(!multiFlag) {
     conn.write(toSimpleError('ERR EXEC without MULTI'))
+  } else {
+    multiFlag = false
+    conn.write("*0\r\n");
   }
 }
 
