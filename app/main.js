@@ -190,12 +190,12 @@ function handleType(typeArgs, conn) {
 
 function handleIncr(incrArgs, conn) {
   if(store.has(incrArgs[0])) {
-    store.set(incrArgs[0], parseInt(store.get(incrArgs[0]).value)+1)
+    store.set(incrArgs[0], { value: String(parseInt(store.get(incrArgs[0]).value)+1) })
     
   } else {
-    store.set(incrArgs[0], { value: 1 })
+    store.set(incrArgs[0], { value: '1' })
   }
-  conn.write(`:${store.get(incrArgs[0])}\r\n`)
+  conn.write(`:${store.get(incrArgs[0]).value}\r\n`)
 }
 
 function commandResponse(commandString, conn) {
