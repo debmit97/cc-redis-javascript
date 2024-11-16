@@ -12,6 +12,7 @@ const {
 const { getStream, RedisStream } = require("./stream.js");
 
 let store = new Map();
+let multiFlag = false
 const replicaConnections = [];
 const env = {};
 
@@ -189,19 +190,30 @@ function handleType(typeArgs, conn) {
 }
 
 function handleIncr(incrArgs, conn) {
-  if(store.has(incrArgs[0])) {
-    if(isNaN(parseInt(store.get(incrArgs[0]).value))) {
-      conn.write(toSimpleError('ERR value is not an integer or out of range'))
+  if (store.has(incrArgs[0])) {
+    if (isNaN(parseInt(store.get(incrArgs[0]).value))) {
+      conn.write(toSimpleError("ERR value is not an integer or out of range"));
     } else {
-
-      store.set(incrArgs[0], { value: String(parseInt(store.get(incrArgs[0]).value)+1) })
-      conn.write(`:${store.get(incrArgs[0]).value}\r\n`)
+      store.set(incrArgs[0], {
+        value: String(parseInt(store.get(incrArgs[0]).value) + 1),
+      });
+      conn.write(`:${store.get(incrArgs[0]).value}\r\n`);
     }
   } else {
-    store.set(incrArgs[0], { value: '1' })
-    conn.write(`:${store.get(incrArgs[0]).value}\r\n`)
+    store.set(incrArgs[0], { value: "1" });
+    conn.write(`:${store.get(incrArgs[0]).value}\r\n`);
   }
-  
+}
+
+function handleMulti(conn) {
+  multiFlag = true
+  conn.write("+OK\r\n");
+}
+
+function handleExec(conn) {
+  if(!multiFlag) {
+    conn.write(toSimpleError('ERR EXEC without MULTI'))
+  }
 }
 
 function commandResponse(commandString, conn) {
@@ -251,6 +263,12 @@ function commandResponse(commandString, conn) {
       break;
     case "INCR":
       handleIncr(commandArray.slice(1), conn);
+      break;
+    case "MULTI":
+      handleMulti(conn);
+      break;
+    case "EXEC":
+      handleExec(conn);
       break;
     default:
       if (!env.replicaof) {
