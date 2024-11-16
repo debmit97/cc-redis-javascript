@@ -4,7 +4,7 @@ const { RDBParser } = require("./parseRDB.js");
 const {
   parsedCommands,
   toRespSimpleString,
-  toBulkString,
+  toSimpleError,
   toArray,
   separateTCPSegment,
 } = require("./parseCommands.js");
@@ -190,12 +190,18 @@ function handleType(typeArgs, conn) {
 
 function handleIncr(incrArgs, conn) {
   if(store.has(incrArgs[0])) {
-    store.set(incrArgs[0], { value: String(parseInt(store.get(incrArgs[0]).value)+1) })
-    
+    if(isNaN(parseInt(store.get(incrArgs[0]).value))) {
+      conn.write(toSimpleError('ERR value is not an integer or out of range'))
+    } else {
+
+      store.set(incrArgs[0], { value: String(parseInt(store.get(incrArgs[0]).value)+1) })
+      conn.write(`:${store.get(incrArgs[0]).value}\r\n`)
+    }
   } else {
     store.set(incrArgs[0], { value: '1' })
+    conn.write(`:${store.get(incrArgs[0]).value}\r\n`)
   }
-  conn.write(`:${store.get(incrArgs[0]).value}\r\n`)
+  
 }
 
 function commandResponse(commandString, conn) {
