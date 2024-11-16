@@ -188,6 +188,16 @@ function handleType(typeArgs, conn) {
   }
 }
 
+function handleIncr(incrArgs, conn) {
+  if(store.has(incrArgs[0])) {
+    store.set(incrArgs[0], ++parseInt(store.get(incrArgs[0])))
+    
+  } else {
+    store.set(incrArgs[0], 1)
+  }
+  conn.write(`:${store.get(incrArgs[0])}\r\n`)
+}
+
 function commandResponse(commandString, conn) {
   const commandArray = commandString.split(" ");
   switch (commandArray[0].toUpperCase()) {
@@ -232,6 +242,9 @@ function commandResponse(commandString, conn) {
       break;
     case "XREAD":
       getStream().handleXread(commandArray.slice(1), conn);
+      break;
+    case "INCR":
+      handleIncr(commandArray.slice(1), conn);
       break;
     default:
       if (!env.replicaof) {
