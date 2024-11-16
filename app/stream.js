@@ -1,7 +1,7 @@
 const { toBulkString, toSimpleError } = require("./parseCommands");
 
 let stream = null;
-let timer = null
+let timer = null;
 
 class RedisStream {
   streamData = {};
@@ -74,33 +74,105 @@ class RedisStream {
     }
   }
 
+  getMaxStreamKey(streamName) {
+
+    function keySort(a, b) {
+      const aMilli = parseInt(a.split('-')[0])
+      const aSeq = parseInt(a.split('-')[1])
+
+      const bMilli = parseInt(b.split('-')[0])
+      const bSeq = parseInt(b.split('-')[1])
+
+      if(aMilli > bMilli) {
+        return true
+      }
+
+      if(aMilli < bMilli) {
+        return false
+      }
+
+      if(aSeq > bSeq) {
+        return true
+      }
+
+      return false
+    }
+    return Object.keys(this.streamData[streamName]).sort(keySort)[0]
+  }
+
   handleXread(xReadArgs, conn) {
     if (xReadArgs[0].toUpperCase() === "BLOCK") {
       const blockPeriod = xReadArgs[1];
 
-      if(blockPeriod !== '0') {
-
-          const nowString = this.getXreadResp(xReadArgs.slice(2))
-          setTimeout((nowString, conn) => {
+      if (blockPeriod !== "0") {
+        const nowString = this.getXreadResp(xReadArgs.slice(2));
+        setTimeout(
+          (nowString, conn) => {
             const newString = this.getXreadResp(xReadArgs.slice(2));
-            if(newString === nowString) {
-                conn.write('$-1\r\n')
+            if (newString === nowString) {
+              conn.write("$-1\r\n");
             } else {
-    
-                conn.write(newString)
+              conn.write(newString);
             }
-          }, blockPeriod, nowString, conn);
+          },
+          blockPeriod,
+          nowString,
+          conn
+        );
       } else {
-        const nowString = this.getXreadResp(xReadArgs.slice(2))
-          timer = setInterval((nowString, conn) => {
-            const newString = this.getXreadResp(xReadArgs.slice(2));
-            if(newString !== nowString) {
-                conn.write(newString)
-                clearInterval(timer)
-            } 
-          }, 1000, nowString, conn);
-      }
+        if (xReadArgs.includes("$")) {
+          console.log(xReadArgs)
+          const streams = [];
+          const args = [];
 
+          const xReadArgsNew = ['streams']
+
+          for (
+            let i = xReadArgs.findIndex((e) => e === "streams") + 1;
+            i < xReadArgs.length;
+            i++
+          ) {
+            if (xReadArgs[i].includes("-")) {
+              args.push(xReadArgs[i]);
+              xReadArgsNew.push(xReadArgs[i])
+            } else if (xReadArgs[i] === '$') {
+              args.push(this.getMaxStreamKey(streams[args.length]))
+              xReadArgsNew.push(args[args.length-1])
+            } else {
+              streams.push(xReadArgs[i]);
+              xReadArgsNew.push(xReadArgs[i])
+            }
+          }
+
+          const nowString = this.getXreadResp(xReadArgsNew);
+          timer = setInterval(
+            (nowString, conn) => {
+              const newString = this.getXreadResp(xReadArgsNew);
+              if (newString !== nowString) {
+                conn.write(newString);
+                clearInterval(timer);
+              }
+            },
+            1000,
+            nowString,
+            conn
+          );
+        } else {
+          const nowString = this.getXreadResp(xReadArgs.slice(2));
+          timer = setInterval(
+            (nowString, conn) => {
+              const newString = this.getXreadResp(xReadArgs.slice(2));
+              if (newString !== nowString) {
+                conn.write(newString);
+                clearInterval(timer);
+              }
+            },
+            1000,
+            nowString,
+            conn
+          );
+        }
+      }
     } else {
       conn.write(this.getXreadResp(xReadArgs));
     }
@@ -142,7 +214,7 @@ class RedisStream {
       resp = resp + this.formatXreadInnerKeys(keys, streams[i]);
     }
 
-    return `*${streams.length}\r\n${resp}`
+    return `*${streams.length}\r\n${resp}`;
   }
 
   handleXRange(xRangeArgs, conn) {
