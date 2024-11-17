@@ -17,6 +17,8 @@ const queueArray = []
 const replicaConnections = [];
 const env = {};
 
+const connections = []
+
 const replicationStatus = {
   bytesProcessed: 0,
   replicasAckCount: 0,
@@ -45,7 +47,7 @@ function handleSet(setArgs, conn, queued = false) {
   const [key, value] = setArgs;
 
   if(multiFlag) {
-    queueArray.push({ args: [setArgs, conn, true], fn: handleSet  })
+    queueArray.push({ args: [setArgs, conn, true], fn: handleSet, meta: conn.meta  })
     conn.write("+QUEUED\r\n");
     return
   }
@@ -59,7 +61,8 @@ function handleSet(setArgs, conn, queued = false) {
   if (!env.replicaof) {
     // it is master instance
 
-    conn.write("+OK\r\n");
+   
+   
     replicationStatus.bytesProcessed =
       replicationStatus.bytesProcessed +
       stringToRespArray(`SET ${setArgs.join(" ")}`).length;
@@ -67,10 +70,23 @@ function handleSet(setArgs, conn, queued = false) {
     replicaConnections.forEach((replicaConnection) => {
       replicaConnection.write(stringToRespArray(`SET ${setArgs.join(" ")}`));
     });
+
+    if(!queued) {
+      conn.write("+OK\r\n");
+    } else {
+      return '+OK\r\n'
+    }
   }
 }
 
-function handleGet(getArg, conn) {
+function handleGet(getArg, conn, queued = false) {
+  console.log(JSON.stringify(conn))
+  if(multiFlag && connections.includes(conn.meta)) {
+    queueArray.push({ args: [getArg, conn, true], fn: handleGet, meta: conn.meta  })
+    conn.write("+QUEUED\r\n");
+    return
+  }
+
   const [key] = getArg;
   if (
     store.has(key) &&
@@ -78,11 +94,18 @@ function handleGet(getArg, conn) {
       (store.get(key).expiration &&
         store.get(key).expiration > BigInt(Date.now())))
   ) {
-    conn.write(
-      `$${store.get(key).value.length}\r\n${store.get(key).value}\r\n`
-    );
+    if(!queued) {
+      conn.write(`$${store.get(key).value.length}\r\n${store.get(key).value}\r\n`);
+    } else {
+      return `$${store.get(key).value.length}\r\n${store.get(key).value}\r\n`
+    }
+   
   } else {
-    conn.write(`$-1\r\n`);
+    if(!queued) {
+      conn.write(`$-1\r\n`);
+    } else {
+      return `$-1\r\n`
+    }
   }
 }
 
@@ -200,28 +223,42 @@ function handleType(typeArgs, conn) {
 function handleIncr(incrArgs, conn, queued = false) {
 
   if(multiFlag) {
-    queueArray.push({ args: [incrArgs, conn, true], fn: handleIncr  })
+    queueArray.push({ args: [incrArgs, conn, true], fn: handleIncr, meta: conn.meta  })
     conn.write("+QUEUED\r\n");
     return
   }
 
   if (store.has(incrArgs[0])) {
     if (isNaN(parseInt(store.get(incrArgs[0]).value))) {
-      conn.write(toSimpleError("ERR value is not an integer or out of range"));
+      if(!queued) {
+        conn.write(toSimpleError("ERR value is not an integer or out of range"));
+      } else {
+        return toSimpleError("ERR value is not an integer or out of range")
+      }
+      
     } else {
       store.set(incrArgs[0], {
         value: String(parseInt(store.get(incrArgs[0]).value) + 1),
       });
-      conn.write(`:${store.get(incrArgs[0]).value}\r\n`);
+      if(!queued) {
+        conn.write(`:${store.get(incrArgs[0]).value}\r\n`);
+      } else {
+        return `:${store.get(incrArgs[0]).value}\r\n`
+      }
     }
   } else {
     store.set(incrArgs[0], { value: "1" });
-    conn.write(`:${store.get(incrArgs[0]).value}\r\n`);
+    if(!queued) {
+      conn.write(`:${store.get(incrArgs[0]).value}\r\n`);
+    } else {
+      return `:${store.get(incrArgs[0]).value}\r\n`
+    }
   }
 }
 
 function handleMulti(conn) {
   multiFlag = true
+  connections.push(conn.meta)
   conn.write("+OK\r\n");
 }
 
@@ -229,8 +266,23 @@ function handleExec(conn) {
   if(!multiFlag) {
     conn.write(toSimpleError('ERR EXEC without MULTI'))
   } else {
+
+    function handleQueuedCommand(command) {
+      return command.fn(...command.args)
+    }
+
     multiFlag = false
-    conn.write("*0\r\n");
+    if(!queueArray.filter(elem => elem.meta === conn.meta).length) {
+
+      conn.write("*0\r\n");
+    } else {
+      let resp = ''
+      for(const command of queueArray.filter(elem => elem.meta === conn.meta)) {
+        resp = resp + handleQueuedCommand(command)
+      }
+      console.log(resp)
+      conn.write(`*${queueArray.length}\r\n${resp}`)
+    }
   }
 }
 
@@ -308,13 +360,18 @@ function commandParser(commandString) {
 }
 
 const server = net.createServer((connection) => {
+  
+  
   connection.on("data", (data) => {
     const command = commandParser(data.toString());
     commandResponse(command, connection);
   });
+
   connection.on("error", (e) => {
     console.log(e);
   });
+
+  connection['meta'] = Date.now()
 });
 
 function loadRDBFile() {
