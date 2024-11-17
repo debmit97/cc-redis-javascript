@@ -13,6 +13,7 @@ const { getStream, RedisStream } = require("./stream.js");
 
 let store = new Map();
 let multiFlag = false
+const queueArray = []
 const replicaConnections = [];
 const env = {};
 
@@ -40,8 +41,15 @@ function stringToRespArray(commandString) {
   return `*${tokens.length}\r\n${resp}`;
 }
 
-function handleSet(setArgs, conn) {
+function handleSet(setArgs, conn, queued = false) {
   const [key, value] = setArgs;
+
+  if(multiFlag) {
+    queueArray.push({ args: [setArgs, conn, true], fn: handleSet  })
+    conn.write("+QUEUED\r\n");
+    return
+  }
+
   store.set(key, { value });
   if (setArgs.length > 2) {
     if (setArgs[2].toUpperCase() === "PX") {
@@ -189,7 +197,14 @@ function handleType(typeArgs, conn) {
   }
 }
 
-function handleIncr(incrArgs, conn) {
+function handleIncr(incrArgs, conn, queued = false) {
+
+  if(multiFlag) {
+    queueArray.push({ args: [incrArgs, conn, true], fn: handleIncr  })
+    conn.write("+QUEUED\r\n");
+    return
+  }
+
   if (store.has(incrArgs[0])) {
     if (isNaN(parseInt(store.get(incrArgs[0]).value))) {
       conn.write(toSimpleError("ERR value is not an integer or out of range"));
