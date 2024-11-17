@@ -80,7 +80,6 @@ function handleSet(setArgs, conn, queued = false) {
 }
 
 function handleGet(getArg, conn, queued = false) {
-  console.log(JSON.stringify(conn))
   if(multiFlag && connections.includes(conn.meta)) {
     queueArray.push({ args: [getArg, conn, true], fn: handleGet, meta: conn.meta  })
     conn.write("+QUEUED\r\n");
@@ -280,7 +279,6 @@ function handleExec(conn) {
       for(const command of queueArray.filter(elem => elem.meta === conn.meta)) {
         resp = resp + handleQueuedCommand(command)
       }
-      console.log(resp)
       conn.write(`*${queueArray.length}\r\n${resp}`)
     }
   }
@@ -372,6 +370,7 @@ const server = net.createServer((connection) => {
   });
 
   connection['meta'] = Date.now()
+  console.log(connections)
 });
 
 function loadRDBFile() {
@@ -411,7 +410,6 @@ if (env.replicaof) {
               offset = offset + 37;
             } else {
               for (const parsedCommand of parsedCommands(command)) {
-                console.log(parsedCommand);
                 commandResponse(parsedCommand, conn);
               }
               offset = offset + command.length;
