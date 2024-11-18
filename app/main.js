@@ -12,8 +12,7 @@ const {
 const { getStream, RedisStream } = require("./stream.js");
 
 let store = new Map();
-let multiFlag = false
-const queueArray = []
+let queueArray = []
 const replicaConnections = [];
 const env = {};
 
@@ -46,7 +45,7 @@ function stringToRespArray(commandString) {
 function handleSet(setArgs, conn, queued = false) {
   const [key, value] = setArgs;
 
-  if(multiFlag) {
+  if(connections.includes(conn.meta)) {
     queueArray.push({ args: [setArgs, conn, true], fn: handleSet, meta: conn.meta  })
     conn.write("+QUEUED\r\n");
     return
@@ -80,7 +79,7 @@ function handleSet(setArgs, conn, queued = false) {
 }
 
 function handleGet(getArg, conn, queued = false) {
-  if(multiFlag && connections.includes(conn.meta)) {
+  if(connections.includes(conn.meta)) {
     queueArray.push({ args: [getArg, conn, true], fn: handleGet, meta: conn.meta  })
     conn.write("+QUEUED\r\n");
     return
@@ -221,7 +220,7 @@ function handleType(typeArgs, conn) {
 
 function handleIncr(incrArgs, conn, queued = false) {
 
-  if(multiFlag) {
+  if(connections.includes(conn.meta)) {
     queueArray.push({ args: [incrArgs, conn, true], fn: handleIncr, meta: conn.meta  })
     conn.write("+QUEUED\r\n");
     return
@@ -256,13 +255,12 @@ function handleIncr(incrArgs, conn, queued = false) {
 }
 
 function handleMulti(conn) {
-  multiFlag = true
   connections.push(conn.meta)
   conn.write("+OK\r\n");
 }
 
 function handleExec(conn) {
-  if(!multiFlag) {
+  if(!connections.includes(conn.meta)) {
     conn.write(toSimpleError('ERR EXEC without MULTI'))
   } else {
 
@@ -270,7 +268,8 @@ function handleExec(conn) {
       return command.fn(...command.args)
     }
 
-    multiFlag = false
+   const index = connections.findIndex(meta => meta === conn.meta)
+   connections.splice(index, 1)
     if(!queueArray.filter(elem => elem.meta === conn.meta).length) {
 
       conn.write("*0\r\n");
@@ -279,8 +278,20 @@ function handleExec(conn) {
       for(const command of queueArray.filter(elem => elem.meta === conn.meta)) {
         resp = resp + handleQueuedCommand(command)
       }
+      queueArray = queueArray.filter(elem => elem.meta !== conn.meta)
       conn.write(`*${queueArray.length}\r\n${resp}`)
     }
+  }
+}
+
+function handleDiscard(conn) {
+  if(connections.includes(conn.meta)) {
+    queueArray = queueArray.filter(elem => elem.meta !== conn.meta)
+    const index = connections.findIndex(meta => meta === conn.meta)
+    connections.splice(index, 1)
+    conn.write('+OK\r\n')
+  } else {
+    conn.write(toSimpleError('ERR DISCARD without MULTI'))
   }
 }
 
@@ -338,6 +349,9 @@ function commandResponse(commandString, conn) {
     case "EXEC":
       handleExec(conn);
       break;
+      case "DISCARD":
+        handleDiscard(conn);
+        break;
     default:
       if (!env.replicaof) {
         conn.write("+OK\r\n");
