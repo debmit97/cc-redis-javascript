@@ -278,8 +278,8 @@ function handleExec(conn) {
       for(const command of queueArray.filter(elem => elem.meta === conn.meta)) {
         resp = resp + handleQueuedCommand(command)
       }
+      conn.write(`*${queueArray.filter(elem => elem.meta === conn.meta).length}\r\n${resp}`)
       queueArray = queueArray.filter(elem => elem.meta !== conn.meta)
-      conn.write(`*${queueArray.length}\r\n${resp}`)
     }
   }
 }
